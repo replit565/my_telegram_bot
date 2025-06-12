@@ -1,144 +1,169 @@
-import os
-import random
+#!/usr/bin/env python3
+"""
+Telegram бот для Railway с работой 24/7
+"""
 import asyncio
+import logging
+import os
+import time
 from datetime import datetime
-
-import pytz
+from flask import Flask, jsonify
+import threading
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 from aiogram.filters import Command
+import random
 
-from background import keep_alive  # keep_alive.py добавим ниже
+# Конфигурация
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+PORT = int(os.environ.get('PORT', 8080))
 
-API_TOKEN = os.getenv("BOT_TOKEN")  # Получаем токен из переменной окружения
+# Логирование
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-bot = Bot(token=API_TOKEN)
+# Создание бота
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-user_ids = set()
-user_language = {}
-confirmed_users = set()
+# Счетчики
+start_time = time.time()
+message_count = 0
 
-# --- Кнопки ---
-main_menu = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="📥 Регистрация"), KeyboardButton(text="📌 Инструкция")],
-    [KeyboardButton(text="💬 Поддержка"), KeyboardButton(text="⚠️ Важное!")],
-    [KeyboardButton(text="🎯 Получить сигнал")]
-], resize_keyboard=True)
+# Flask приложение для Railway
+app = Flask(__name__)
 
-deposit_menu = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="💳 Пополнить"), KeyboardButton(text="✅ Я пополнил")]
-], resize_keyboard=True)
+@app.route('/')
+def home():
+    uptime = time.time() - start_time
+    return f"""
+    <html>
+    <head><title>Mines Signal Bot</title></head>
+    <body style="background:#000;color:#0f0;font-family:monospace;text-align:center;padding:50px;">
+        <h1>🎯 Mines Signal Bot Active</h1>
+        <p>Bot: @Mines_ChatGPT_signal_bot</p>
+        <p>Uptime: {uptime:.0f} seconds</p>
+        <p>Messages: {message_count}</p>
+        <p>Status: ✅ Online 24/7</p>
+        <p>Platform: Railway.app</p>
+        <p>Последнее обновление: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </body>
+    </html>
+    """
 
-# --- Команда /start ---
+@app.route('/health')
+def health():
+    return jsonify({
+        "status": "healthy",
+        "bot": "Mines_ChatGPT_signal_bot",
+        "uptime": time.time() - start_time,
+        "messages": message_count,
+        "platform": "railway",
+        "timestamp": datetime.now().isoformat()
+    })
+
+# Обработчики бота
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
+    global message_count
+    message_count += 1
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="🎯 English", callback_data="lang_en")],
+        [types.InlineKeyboardButton(text="🎯 Русский", callback_data="lang_ru")]
+    ])
+    
     await message.answer(
-        "🌍 Выберите язык / Select your language:",
-        reply_markup=ReplyKeyboardMarkup(keyboard=[
-            [KeyboardButton(text="Русский"), KeyboardButton(text="English")]
-        ], resize_keyboard=True)
+        "🎯 Welcome to Mines Signal Bot!\n"
+        "Choose your language:",
+        reply_markup=keyboard
     )
 
-# --- Выбор языка ---
-@dp.message(lambda message: message.text in ["Русский", "English"])
-async def set_language(message: types.Message):
-    lang = "ru" if message.text == "Русский" else "en"
-    user_language[message.from_user.id] = lang
-    await message.answer("✅ Язык выбран. Добро пожаловать!" if lang == "ru" else "✅ Language selected. Welcome!", reply_markup=main_menu)
+@dp.callback_query(lambda c: c.data.startswith('lang_'))
+async def set_language(callback: types.CallbackQuery):
+    lang = callback.data.split('_')[1]
+    
+    if lang == 'ru':
+        text = """🎯 Добро пожаловать в Mines Signal Bot!
 
-# --- Инструкция ---
-@dp.message(lambda message: message.text == "📌 Инструкция")
-async def instruction(message: types.Message):
-    await message.answer("1. Перейдите по ссылке\n2. Введите промокод: MONETKA50\n3. Пополните счёт от 1000 руб\n4. Введите свой ID")
+📱 Регистрация:
+1️⃣ Зарегистрируйтесь: https://1wxxlb.com/v3/aggressive-casino/list?p=ziuo
+2️⃣ Пополните баланс минимум 100₽
+3️⃣ Отправьте ID после депозита
 
-# --- Поддержка ---
-@dp.message(lambda message: message.text == "💬 Поддержка")
-async def support(message: types.Message):
-    await message.answer("📩 Связь с поддержкой: @kaznet20")
-
-# --- Важное ---
-@dp.message(lambda message: message.text == "⚠️ Важное!")
-async def important(message: types.Message):
-    await message.answer(
-        "❗️Чтобы не было подозрений от 1WIN, играйте аккуратно и проигрывайте каждую 5 игру или 6 игру в Mines.\n\n"
-        "❗Почему? Если вы будете постоянно выигрывать, ваш аккаунт попадёт под подозрение. "
-        "Если его проверят и найдут софт — лавочка закроется!\n\n"
-        "⚠️ Соблюдайте правила для своей безопасности и сохранения аккаунта!"
-    )
-
-# --- Регистрация ---
-@dp.message(lambda message: message.text == "📥 Регистрация")
-async def registration(message: types.Message):
-    await message.answer(
-        "🎰 Регистрируйся по ссылке:\n"
-        "https://1wilib.life/v3/aggressive-casino?p=as47\n\n" 
-        "🧾 ПРИ РЕГИСТРАЦИИ ВВЕДИТЕ ПРОМОКОД: MONETKA50\n\n"
-        "❗️ СТРОГО НОВЫЙ АККАУНТ 1WIN! 💥\n\n"
-        "✍️ Введи свой ID:"
-    )
-
-# --- Обработка ID ---
-@dp.message(lambda message: message.text and message.text.isdigit() and len(message.text) >= 4)
-async def save_id(message: types.Message):
-    user_ids.add(message.from_user.id)
-    await message.answer(
-        "💳 Отлично! Твой ID принят ✅\n\n"
-        "🔎 Теперь внеси *тестировочный депозит* от **1000₽**, чтобы наш 🤖 ИИ увидел твой игровой аккаунт и подключился к твоему серверу 🎯\n\n"
-        "🔐 Это необходимо, чтобы система могла начать выдавать тебе точные сигналы без задержек и ошибок 🧠⚡\n\n"
-        "📌 После пополнения нажми кнопку 👉 «✅ Я пополнил»",
-        reply_markup=deposit_menu
-    )
-
-# --- Кнопка Пополнить ---
-@dp.message(lambda message: message.text == "💳 Пополнить")
-async def deposit_link(message: types.Message):
-    await message.answer("💸 Пополни счёт здесь: https://1wilib.life/v3/aggressive-casino?p=as47")
-
-# --- Я пополнил ---
-@dp.message(lambda message: message.text == "✅ Я пополнил")
-async def confirm_deposit(message: types.Message):
-    if message.from_user.id in user_ids:
-        confirmed_users.add(message.from_user.id)
-        await message.answer("✅ Депозит подтверждён! Теперь ты можешь получать сигналы.", reply_markup=main_menu)
+🎮 Получайте точные сигналы для игры Mines!
+✨ Работает 24/7 на Railway.app"""
     else:
-        await message.answer("⚠️ Сначала зарегистрируйся и введи свой ID!")
+        text = """🎯 Welcome to Mines Signal Bot!
 
-# --- Получить сигнал ---
-@dp.message(lambda message: message.text == "🎯 Получить сигнал")
+📱 Registration:
+1️⃣ Register: https://1wxxlb.com/v3/aggressive-casino/list?p=ziuo
+2️⃣ Deposit minimum 100₽
+3️⃣ Send your ID after deposit
+
+🎮 Get accurate signals for Mines game!
+✨ Running 24/7 on Railway.app"""
+    
+    await callback.message.edit_text(text)
+
+@dp.message(Command("signal"))
 async def send_signal(message: types.Message):
-    if message.from_user.id not in confirmed_users:
-        await message.answer("⚠️ Чтобы получать сигналы, нужно сначала пополнить счёт и нажать «✅ Я пополнил»!")
-        return
+    global message_count
+    message_count += 1
+    
+    # Случайный выбор сигнала (1-12)
+    signal_num = random.randint(1, 12)
+    mines_count = random.randint(3, 7)
+    
+    await message.answer(f"🎯 SIGNAL #{signal_num}\n💣 Mines: {mines_count}\n🎮 Good luck!")
 
-    folder_path = "screens"
-    if not os.path.exists(folder_path):
-        await message.answer("⚠️ Скрины не найдены.")
-        return
-
-    files = os.listdir(folder_path)
-    image_files = [f for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'))]
-
-    if not image_files:
-        await message.answer("⚠️ Скрины не найдены.")
-        return
-
-    selected_file = random.choice(image_files)
-    file_path = os.path.join(folder_path, selected_file)
-
-    moscow_tz = pytz.timezone('Europe/Moscow')
-    moscow_time = datetime.now(moscow_tz)
-
-    photo = FSInputFile(file_path)
-    await message.answer_photo(
-        photo=photo,
-        caption=f"🎯 Кол-во мин: 3\n🕐 Время: {moscow_time.strftime('%H:%M:%S')} (МСК)\n⚠️ Рекомендую проигрывать каждую 5 игру чтоб не было подозрений от 1WIN 🎯"
+@dp.message(Command("status"))
+async def status_cmd(message: types.Message):
+    global message_count
+    message_count += 1
+    
+    uptime = time.time() - start_time
+    await message.answer(
+        f"📊 Bot Status\n"
+        f"⏱️ Uptime: {uptime:.0f}s\n"
+        f"📱 Messages: {message_count}\n"
+        f"🟢 Status: Online 24/7\n"
+        f"🚀 Platform: Railway.app"
     )
 
-# --- Запуск ---
-async def main():
+@dp.message()
+async def handle_message(message: types.Message):
+    global message_count
+    message_count += 1
+    
+    if message.text and message.text.isdigit():
+        await message.answer("✅ ID получен! Ожидайте подтверждения депозита.")
+    else:
+        await message.answer("📝 Отправьте ваш ID после депозита для получения сигналов.")
+
+async def start_bot():
+    """Запуск бота"""
+    logger.info("Starting Telegram bot...")
     await dp.start_polling(bot)
 
-if __name__ == '__main__':
-    keep_alive()  # Запуск web-сервера для поддержки работы на хостинге
+def start_flask():
+    """Запуск Flask в отдельном потоке"""
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
+
+async def main():
+    """Основная функция"""
+    logger.info(f"Starting Mines Signal Bot on port {PORT}")
+    logger.info("Railway.app deployment - 24/7 operation")
+    
+    # Запуск Flask в отдельном потоке
+    flask_thread = threading.Thread(target=start_flask, daemon=True)
+    flask_thread.start()
+    
+    # Запуск бота
+    await start_bot()
+
+if __name__ == "__main__":
+    if not BOT_TOKEN:
+        logger.error("BOT_TOKEN environment variable not set")
+        exit(1)
+    
     asyncio.run(main())
