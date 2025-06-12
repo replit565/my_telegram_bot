@@ -1,15 +1,16 @@
-from flask import Flask
-from threading import Thread
+# Mines Signal Bot - Ready for Deployment
 
-app = Flask('')
+Telegram бот для получения сигналов к игре Mines на 1WIN.
 
-@app.route('/')
-def home():
-    return "Bot is alive!"
+## Деплой на Render.com:
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
+1. Fork этот репозиторий
+2. Зайдите на https://render.com
+3. New → Web Service
+4. Подключите репозиторий
+5. Build: pip install -r requirements.txt
+6. Start: python main.py
+7. Добавьте BOT_TOKEN в Environment Variables
+8. Deploy
 
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
+Бот будет работать 24/7 бесплатно 750 часов в месяц.
