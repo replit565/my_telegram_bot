@@ -1,5 +1,3 @@
-import web
-from background import keep_alive 
 import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
@@ -8,20 +6,56 @@ from datetime import datetime
 import pytz
 import os
 import random
+import logging
+from flask import Flask
+import threading
 
-API_TOKEN = '8143505253:AAHXz5W3-ow08qHoNX1RKmUjqu_sFjHxKOQ'
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Получаем токен из переменных окружения или используем дефолтный
+API_TOKEN = os.getenv('BOT_TOKEN', '8143505253:AAHXz5W3-ow08qHoNX1RKmUjqu_sFjHxKOQ')
+PORT = int(os.environ.get('PORT', 8080))
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 user_ids = set()
 user_language = {}
+confirmed_users = set()
+
+# Flask приложение для Render
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return """
+    <html>
+    <head><title>Mines Signal Bot</title></head>
+    <body style="background:#000;color:#0f0;font-family:monospace;text-align:center;padding:50px;">
+        <h1>🎯 Mines Signal Bot Active</h1>
+        <p>Bot: @Mines_ChatGPT_signal_bot</p>
+        <p>Status: ✅ Online 24/7</p>
+        <p>Platform: Render.com</p>
+        <p>Users: {len(confirmed_users)} confirmed</p>
+    </body>
+    </html>
+    """
+
+@app.route('/health')
+def health():
+    return {"status": "healthy", "bot": "active"}
 
 # --- Кнопки ---
 main_menu = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text="📥 Регистрация"), KeyboardButton(text="📌 Инструкция")],
     [KeyboardButton(text="💬 Поддержка"), KeyboardButton(text="⚠️ Важное!")],
     [KeyboardButton(text="🎯 Получить сигнал")]
+], resize_keyboard=True)
+
+deposit_menu = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text="💳 Пополнить"), KeyboardButton(text="✅ Я пополнил")]
 ], resize_keyboard=True)
 
 # --- Команда /start ---
@@ -50,6 +84,7 @@ async def instruction(message: types.Message):
 @dp.message(lambda message: message.text == "💬 Поддержка")
 async def support(message: types.Message):
     await message.answer("📩 Связь с поддержкой: @kaznet20")
+
 # --- Важное ---
 @dp.message(lambda message: message.text == "⚠️ Важное!")
 async def important(message: types.Message):
@@ -59,61 +94,105 @@ async def important(message: types.Message):
         "Если его проверят и найдут софт — лавочка закроется!\n\n"
         "⚠️ Соблюдайте правила для своей безопасности и сохранения аккаунта!"
     )
+
 # --- Регистрация ---
 @dp.message(lambda message: message.text == "📥 Регистрация")
 async def registration(message: types.Message):
     await message.answer(
         "🎰 Регистрируйся по ссылке:\n"
         "https://1wilib.life/v3/aggressive-casino?p=as47\n\n" 
-        "🧾  ПРИ РЕГИСТРАЦИИ ВВЕДИТЕ ПРОКОМОД : MONETKA50\n\n"
-        "❗️ СТРОГО НОВЫЙ АККАНТ 1WIN! 💥\n"
-        
-        "✍️ Сделайте тестируемый депозит,чтобы бот подключился к вашему аккаунту 1WIN, и начал выдавать точные сигналы.\n"
-        "❓ Введи свой ID:"
+        "🧾 ПРИ РЕГИСТРАЦИИ ВВЕДИТЕ ПРОМОКОД: MONETKA50\n\n"
+        "❗️ СТРОГО НОВЫЙ АККАУНТ 1WIN! 💥\n\n"
+        "✍️ Введи свой ID:"
     )
 
+# --- Обработка ID ---
 @dp.message(lambda message: message.text and message.text.isdigit() and len(message.text) >= 4)
 async def save_id(message: types.Message):
     user_ids.add(message.from_user.id)
-    await message.answer("✅ ID принят. Теперь вы можете получать сигналы!")
+    await message.answer(
+        "💳 Отлично! Твой ID принят ✅\n\n"
+        "🔎 Теперь внеси *тестировочный депозит* от **1000₽**, чтобы наш 🤖 ИИ увидел твой игровой аккаунт и подключился к твоему серверу 🎯\n\n"
+        "🔐 Это необходимо, чтобы система могла начать выдавать тебе точные сигналы без задержек и ошибок 🧠⚡\n\n"
+        "📌 После пополнения нажми кнопку 👉 «✅ Я пополнил»",
+        reply_markup=deposit_menu
+    )
+
+# --- Кнопка Пополнить ---
+@dp.message(lambda message: message.text == "💳 Пополнить")
+async def deposit_link(message: types.Message):
+    await message.answer("💸 Пополни счёт здесь: https://1wilib.life/v3/aggressive-casino?p=as47")
+
+# --- Я пополнил ---
+@dp.message(lambda message: message.text == "✅ Я пополнил")
+async def confirm_deposit(message: types.Message):
+    if message.from_user.id in user_ids:
+        confirmed_users.add(message.from_user.id)
+        await message.answer("✅ Депозит подтверждён! Теперь ты можешь получать сигналы.", reply_markup=main_menu)
+    else:
+        await message.answer("⚠️ Сначала зарегистрируйся и введи свой ID!")
 
 # --- Получить сигнал ---
 @dp.message(lambda message: message.text == "🎯 Получить сигнал")
 async def send_signal(message: types.Message):
-    if message.from_user.id not in user_ids:
-        await message.answer("⚠️ Сначала зарегистрируйтесь и введи свой ID!")
+    if message.from_user.id not in confirmed_users:
+        await message.answer("⚠️ Чтобы получать сигналы, нужно сначала пополнить счёт и нажать «✅ Я пополнил»!")
         return
 
     folder_path = "screens"
     if not os.path.exists(folder_path):
-        await message.answer("⚠️ Скрины не найдены.")
+        # Создаем папку если её нет
+        os.makedirs(folder_path, exist_ok=True)
+        await message.answer("⚠️ Скрины не найдены. Папка создана, добавьте изображения.")
         return
-        
+
     files = os.listdir(folder_path)
     image_files = [f for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'))]
-    
+
     if not image_files:
-        await message.answer("⚠️ Скрины не найдены.")
+        await message.answer("⚠️ Скрины не найдены в папке screens/")
         return
 
     selected_file = random.choice(image_files)
     file_path = os.path.join(folder_path, selected_file)
 
-    # Получаем московское время
     moscow_tz = pytz.timezone('Europe/Moscow')
     moscow_time = datetime.now(moscow_tz)
-    
-    photo = FSInputFile(file_path)
-    await message.answer_photo(
-        photo=photo,
-        caption=f"🎯 Кол-во мин: 3\n🕐 Время: {moscow_time.strftime('%H:%M:%S')} (МСК)\n⚠️ Рекомендую проигрывать каждую 5 игру чтоб не было подозрений от 1WIN 🎯"
-    )
+
+    try:
+        photo = FSInputFile(file_path)
+        await message.answer_photo(
+            photo=photo,
+            caption=f"🎯 Кол-во мин: 3\n🕐 Время: {moscow_time.strftime('%H:%M:%S')} (МСК)\n⚠️ Рекомендую проигрывать каждую 5 игру чтоб не было подозрений от 1WIN 🎯"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка отправки фото: {e}")
+        await message.answer("⚠️ Ошибка при отправке сигнала. Попробуйте позже.")
+
+def start_flask():
+    """Запуск Flask в отдельном потоке"""
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
+
+# --- Функция запуска бота с обработкой ошибок ---
+async def run_bot():
+    logger.info("🚀 Бот запускается...")
+    while True:
+        try:
+            await dp.start_polling(bot)
+        except Exception as e:
+            logger.error(f"❌ Ошибка в работе бота: {e}")
+            logger.info("🔄 Перезапуск через 5 секунд...")
+            await asyncio.sleep(5)
 
 # --- Запуск ---
 async def main():
-    await dp.start_polling(bot)
+    # Запускаем Flask в отдельном потоке для Render
+    flask_thread = threading.Thread(target=start_flask, daemon=True)
+    flask_thread.start()
     
-keep_alive()
+    # Запускаем бота с обработкой ошибок
+    await run_bot()
+
 if __name__ == '__main__':
+    logger.info("Запуск Telegram бота для работы 24/7...")
     asyncio.run(main())
-app.run(host="0.0.0.0", port=8080)
