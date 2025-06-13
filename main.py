@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Получаем токен из переменных окружения или используем дефолтный
-API_TOKEN = os.getenv('BOT_TOKEN', '8143505253:AAHXz5W3-ow08qHoNX1RKmUjqu_sFjHxKOQ')
+API_TOKEN = os.getenv('BOT_TOKEN', '8143505253:AAFxhvbvIZK4Bp4aLGJw6hH5yufzWyAOL3Q'
 PORT = int(os.environ.get('PORT', 8080))
 
 bot = Bot(token=API_TOKEN)
