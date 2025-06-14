@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Получаем токен из переменных окружения или используем дефолтный
-API_TOKEN = os.getenv('BOT_TOKEN', '8143505253:AAFxhvbvIZK4Bp4aLGJw6hH5yufzWyAOL3Q'
+API_TOKEN = os.getenv('BOT_TOKEN', '8143505253:AAFxhvbvIZK4Bp4aLGJw6hH5yufzWyAOL3Q')
 PORT = int(os.environ.get('PORT', 8080))
 
 bot = Bot(token=API_TOKEN)
@@ -30,7 +30,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return """
+    return f"""
     <html>
     <head><title>Mines Signal Bot</title></head>
     <body style="background:#000;color:#0f0;font-family:monospace;text-align:center;padding:50px;">
@@ -58,14 +58,16 @@ deposit_menu = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text="💳 Пополнить"), KeyboardButton(text="✅ Я пополнил")]
 ], resize_keyboard=True)
 
+language_menu = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text="Русский"), KeyboardButton(text="English")]
+], resize_keyboard=True)
+
 # --- Команда /start ---
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
     await message.answer(
         "🌍 Выберите язык / Select your language:",
-        reply_markup=ReplyKeyboardMarkup(keyboard=[
-            [KeyboardButton(text="Русский"), KeyboardButton(text="English")]
-        ], resize_keyboard=True)
+        reply_markup=language_menu
     )
 
 # --- Выбор языка ---
@@ -73,12 +75,27 @@ async def start_cmd(message: types.Message):
 async def set_language(message: types.Message):
     lang = "ru" if message.text == "Русский" else "en"
     user_language[message.from_user.id] = lang
-    await message.answer("✅ Язык выбран. Добро пожаловать!" if lang == "ru" else "✅ Language selected. Welcome!", reply_markup=main_menu)
+    await message.answer(
+        "✅ Язык выбран. Добро пожаловать!" if lang == "ru" else "✅ Language selected. Welcome!",
+        reply_markup=main_menu
+    )
 
 # --- Инструкция ---
 @dp.message(lambda message: message.text == "📌 Инструкция")
 async def instruction(message: types.Message):
-    await message.answer("1. Перейдите по ссылке\n2. Введите промокод: MONETKA50\n3. Пополните счёт от 1000 руб\n4. Введите свой ID")
+    lang = user_language.get(message.from_user.id, "ru")
+    text = (
+        "1. Перейдите по ссылке\n"
+        "2. Введите промокод: MONETKA50\n"
+        "3. Пополните счёт от 1000 руб\n"
+        "4. Введите свой ID"
+    ) if lang == "ru" else (
+        "1. Follow the link\n"
+        "2. Enter promo code: MONETKA50\n"
+        "3. Deposit at least 1000 RUB\n"
+        "4. Enter your ID"
+    )
+    await message.answer(text)
 
 # --- Поддержка ---
 @dp.message(lambda message: message.text == "💬 Поддержка")
@@ -98,25 +115,39 @@ async def important(message: types.Message):
 # --- Регистрация ---
 @dp.message(lambda message: message.text == "📥 Регистрация")
 async def registration(message: types.Message):
-    await message.answer(
+    lang = user_language.get(message.from_user.id, "ru")
+    text = (
         "🎰 Регистрируйся по ссылке:\n"
-        "https://1wilib.life/v3/aggressive-casino?p=as47\n\n" 
+        "https://1wilib.life/v3/aggressive-casino?p=as47\n\n"
         "🧾 ПРИ РЕГИСТРАЦИИ ВВЕДИТЕ ПРОМОКОД: MONETKA50\n\n"
         "❗️ СТРОГО НОВЫЙ АККАУНТ 1WIN! 💥\n\n"
         "✍️ Введи свой ID:"
+    ) if lang == "ru" else (
+        "🎰 Register here:\n"
+        "https://1wilib.life/v3/aggressive-casino?p=as47\n\n"
+        "🧾 USE PROMO CODE: MONETKA50\n\n"
+        "❗️ STRICTLY NEW 1WIN ACCOUNT! 💥\n\n"
+        "✍️ Enter your ID:"
     )
+    await message.answer(text)
 
 # --- Обработка ID ---
 @dp.message(lambda message: message.text and message.text.isdigit() and len(message.text) >= 4)
 async def save_id(message: types.Message):
     user_ids.add(message.from_user.id)
-    await message.answer(
+    lang = user_language.get(message.from_user.id, "ru")
+    text = (
         "💳 Отлично! Твой ID принят ✅\n\n"
         "🔎 Теперь внеси *тестировочный депозит* от **1000₽**, чтобы наш 🤖 ИИ увидел твой игровой аккаунт и подключился к твоему серверу 🎯\n\n"
         "🔐 Это необходимо, чтобы система могла начать выдавать тебе точные сигналы без задержек и ошибок 🧠⚡\n\n"
-        "📌 После пополнения нажми кнопку 👉 «✅ Я пополнил»",
-        reply_markup=deposit_menu
+        "📌 После пополнения нажми кнопку 👉 «✅ Я пополнил»"
+    ) if lang == "ru" else (
+        "💳 Great! Your ID is accepted ✅\n\n"
+        "🔎 Now make a *test deposit* of **1000₽**, so our 🤖 AI can see your gaming account and connect to your server 🎯\n\n"
+        "🔐 This is necessary for the system to start giving you accurate signals without delays or errors 🧠⚡\n\n"
+        "📌 After deposit, press the button 👉 «✅ Confirm deposit»"
     )
+    await message.answer(text, reply_markup=deposit_menu)
 
 # --- Кнопка Пополнить ---
 @dp.message(lambda message: message.text == "💳 Пополнить")
@@ -128,15 +159,26 @@ async def deposit_link(message: types.Message):
 async def confirm_deposit(message: types.Message):
     if message.from_user.id in user_ids:
         confirmed_users.add(message.from_user.id)
-        await message.answer("✅ Депозит подтверждён! Теперь ты можешь получать сигналы.", reply_markup=main_menu)
+        lang = user_language.get(message.from_user.id, "ru")
+        await message.answer(
+            "✅ Депозит подтверждён! Теперь ты можешь получать сигналы." if lang == "ru" else "✅ Deposit confirmed! Now you can receive signals.",
+            reply_markup=main_menu
+        )
     else:
-        await message.answer("⚠️ Сначала зарегистрируйся и введи свой ID!")
+        lang = user_language.get(message.from_user.id, "ru")
+        await message.answer(
+            "⚠️ Сначала зарегистрируйся и введи свой ID!" if lang == "ru" else "⚠️ Please register and enter your ID first!"
+        )
 
 # --- Получить сигнал ---
 @dp.message(lambda message: message.text == "🎯 Получить сигнал")
 async def send_signal(message: types.Message):
     if message.from_user.id not in confirmed_users:
-        await message.answer("⚠️ Чтобы получать сигналы, нужно сначала пополнить счёт и нажать «✅ Я пополнил»!")
+        lang = user_language.get(message.from_user.id, "ru")
+        await message.answer(
+            "⚠️ Чтобы получать сигналы, нужно сначала пополнить счёт и нажать «✅ Я пополнил»!" if lang == "ru" else
+            "⚠️ To receive signals, you must first deposit and press «✅ Confirm deposit»!"
+        )
         return
 
     folder_path = "screens"
